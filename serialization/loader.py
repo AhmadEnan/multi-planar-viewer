@@ -9,7 +9,8 @@ import pydicom
 from pydicom.dataset import FileDataset
 from typing import Optional, Dict, Any, Union, List
 from pathlib import Path
-from collections import defaultdict
+import dicom2nifti
+import tempfile
 
 
 class DataLoader:
@@ -44,7 +45,14 @@ class DataLoader:
         else: # assume a single file (nifti or dicom)
             ext = os.path.splitext(self.path)[1].lower()
             if ext in ['.nii', '.nii.gz', '.gz']:
-                self.data = self._load_nifti_file(self.path)
+                try:
+                    self.data = self._load_nifti_file(self.path)
+                except Exception as e:
+                    # Try DICOM as fallback for .gz (some DICOMs are .dcm.gz)
+                    try:
+                        self.data = self._load_dicom_file(self.path)
+                    except:
+                        raise ValueError(f"Unsupported or invalid file: {self.path} ({e})")        
             elif ext in ['.dcm']:
                 self.data = self._load_dicom_file(self.path)
             else:
@@ -59,7 +67,11 @@ class DataLoader:
         affine = nii.affine
         header = nii.header
 
-        voxel_spacing = tuple(header.get_zooms()[:3])
+        # Pad voxel_spacing with 1.0 for missing dimensions,
+        # ensuring at least 3 values (e.g., for 2D: (dx, dy, 1.0)).
+        # This maintains consistency with 3D output format.
+        zooms = header.get_zooms()
+        voxel_spacing = tuple(zooms[:3] + (1.0,) * (3 - len(zooms[:3])))
         metadata = {k: str(header[k]) for k in header.keys()}
 
         return {
@@ -75,6 +87,9 @@ class DataLoader:
         """load a single dicom file"""
         ds = pydicom.dcmread(file_path)
         image = ds.pixel_array.astype(np.float32)
+
+        image = self._apply_dicom_rescale(image, ds)
+
         voxel_spacing = self._get_dicom_spacing(ds)
         metadata = self._extract_metadata(ds)
 
@@ -86,51 +101,7 @@ class DataLoader:
             "format": "dicom",
         }
     
-    # def _load_dicom_series(self, folder_path: str) -> Dict[str, Any]:
-    #     """Load all DICOM files in a folder as a 3D volume"""
-
-    #     files = []
-    #     for f in os.listdir(folder_path):
-    #         full_path = os.path.join(folder_path, f)
-    #         try:
-    #             ds = pydicom.dcmread(full_path, stop_before_pixels=True)
-    #             if hasattr(ds, "InstanceNumber"):
-    #                 files.append(full_path)
-    #         except Exception:
-    #             continue
-
-    #     if not files:
-    #         raise ValueError("No valid DICOM files found in folder.")
-
-    #     # Sort by InstanceNumber or SliceLocation
-    #     dicoms: List[FileDataset] = []
-    #     for f in files:
-    #         try:
-    #             ds = pydicom.dcmread(f)
-    #             dicoms.append(ds)
-    #         except Exception as e:
-    #             print(f"Warning: Skipping {f}: {e}")
-
-    #     dicoms.sort(key=lambda d: getattr(d, "InstanceNumber", 0))
-    #     for d in dicoms:
-    #         print(d.SOPInstanceUID, d.pixel_array.shape)
-
-    #     # Stack into 3D volume
-    #     image_stack = np.stack([d.pixel_array for d in dicoms]).astype(np.float32)
-
-    #     voxel_spacing = self._get_dicom_spacing(dicoms[0])
-    #     orientation = self._compute_affine_series(dicoms)
-    #     metadata = self._extract_metadata(dicoms[0])
-
-    #     return {
-    #         "image": image_stack,            # [Z, Y, X]
-    #         "voxel_spacing": voxel_spacing,  # (dx, dy, dz)
-    #         "orientation": orientation,      # 4x4 matrix
-    #         "metadata": metadata,
-    #         "format": "dicom",
-    #     }
-
-    def _load_dicom_series(self, folder_path):
+    def _load_dicom_series(self, folder_path: str) -> Dict[str, Any]:
         folder_path = Path(folder_path)
         dicom_files = [f for f in folder_path.iterdir() if f.is_file()]
         if not dicom_files:
@@ -146,50 +117,37 @@ class DataLoader:
 
         if not dicoms:
             raise ValueError(f"No valid DICOM files in {folder_path}")
+        
+        first_ds = next((pydicom.dcmread(f) for f in dicom_files), None)
+        if not first_ds:
+            raise ValueError("No valid DICOM found")
 
-        # Group by SeriesInstanceUID
-        series_dict = defaultdict(list)
-        for d in dicoms:
-            uid = getattr(d, "SeriesInstanceUID", None)
-            if uid:
-                series_dict[uid].append(pydicom.dcmread(d.filename))
+        # Convert series to temporary NIfTI
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_nii = Path(temp_dir) / "series.nii.gz"
+            dicom2nifti.convert_directory(folder_path, temp_dir, compression=True, reorient=True)
 
-        if not series_dict:
-            raise ValueError("No DICOM series found in this folder.")
+            # Find the generated NIfTI file
+            nii_files = [f for f in Path(temp_dir).iterdir() if f.suffixes == ['.nii', '.gz']]
+            if not nii_files:
+                raise ValueError("No NIfTI files generated from DICOM series")
+            
+            # Pick the largest (likely most slices)
+            output_nii = max(nii_files, key=lambda f: f.stat().st_size)
 
-        # Pick the largest one (most slices)
-        main_series = max(series_dict.values(), key=len)
-
-        # Sort by slice position
-        try:
-            main_series.sort(key=lambda d: float(d.ImagePositionPatient[2]))
-        except Exception:
-            pass
-
-        # Verify consistent shape
-        shapes = [d.pixel_array.shape for d in main_series]
-        if len(set(shapes)) > 1:
-            raise ValueError(f"Inconsistent slice shapes: {set(shapes)}")
-
-        # Stack into 3D volume
-        image_stack = np.stack([d.pixel_array for d in main_series]).astype(np.float32)
-
-        slope = float(main_series[0].get("RescaleSlope", 1.0))
-        intercept = float(main_series[0].get("RescaleIntercept", 0.0))
-        image_stack = image_stack * slope + intercept
-
-        pixel_spacing = list(getattr(main_series[0], "PixelSpacing", [1, 1]))
-        slice_thickness = float(getattr(main_series[0], "SliceThickness", 1.0))
-        metadata = self._extract_metadata(main_series[0])
+            # Load the generated NIfTI
+            nii = nib.load(str(output_nii))
+            image = nii.get_fdata(dtype=np.float32)
+            affine = nii.affine
+            header = nii.header
+            voxel_spacing = tuple(header.get_zooms()[:3])
 
         return {
-            "image": image_stack,
-            "metadata": metadata,
-            "PatientName": str(getattr(main_series[0], "PatientName", "Unknown")),
-            "PatientID": str(getattr(main_series[0], "PatientID", "Unknown")),
-            "Modality": str(getattr(main_series[0], "Modality", "Unknown")),
-            "SeriesDescription": str(getattr(main_series[0], "SeriesDescription", "Unknown")),
-            "VoxelSpacing": pixel_spacing + [slice_thickness],
+            "image": image,
+            "voxel_spacing": voxel_spacing,
+            "orientation": affine,
+            "metadata": self._extract_metadata(first_ds),  # Use first DICOM for metadata
+            "format": "dicom",  # Still mark as DICOM origin
         }
 
     # ---------------------------------------------------------------
@@ -203,6 +161,12 @@ class DataLoader:
             return tuple((*pixel_spacing, dz))
         except Exception:
             return (1.0, 1.0, 1.0)
+    
+    def _apply_dicom_rescale(self, image: np.ndarray, ds: FileDataset) -> np.ndarray:
+        """Apply rescale slope/intercept to DICOM pixel data"""
+        slope = float(getattr(ds, 'RescaleSlope', 1.0))
+        intercept = float(getattr(ds, 'RescaleIntercept', 0.0))
+        return image * slope + intercept
 
     def _extract_metadata(self, ds: FileDataset) -> Dict[str, Any]:
         """Extract relevant metadata safely."""
@@ -215,25 +179,8 @@ class DataLoader:
         for field in fields:
             val = getattr(ds, field, None)
             if val is not None:
-                md[field] = str(val)
+                md[field] = val # keep original type
         return md
-
-    def _compute_affine_series(self, dicoms: List[FileDataset]) -> np.ndarray:
-        """Compute approximate affine transform for DICOM series."""
-        try:
-            ds0, ds1 = dicoms[0], dicoms[1]
-            pos0 = np.array(ds0.ImagePositionPatient, dtype=float)
-            pos1 = np.array(ds1.ImagePositionPatient, dtype=float)
-            orient = np.array(ds0.ImageOrientationPatient, dtype=float).reshape(2, 3)
-            row_dir, col_dir = orient
-            normal_dir = np.cross(row_dir, col_dir)
-            dz = np.linalg.norm(pos1 - pos0)
-            affine = np.eye(4)
-            affine[:3, :3] = np.vstack((row_dir, col_dir, normal_dir)).T * [*ds0.PixelSpacing, dz]
-            affine[:3, 3] = pos0
-            return affine
-        except Exception:
-            return np.eye(4)
 
     def _compute_affine_single(self, ds: FileDataset) -> np.ndarray:
         """Compute approximate affine for single DICOM slice."""

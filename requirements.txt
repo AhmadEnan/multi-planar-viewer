@@ -6,3 +6,4 @@ numpy
 pylibjpeg
 pylibjpeg-libjpeg
 pylibjpeg-openjpeg
+dicom2nifti
