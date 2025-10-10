@@ -327,7 +327,7 @@ class InspectorPanel(QWidget):
             path = Path(filepath)
             file_size_mb = path.stat().st_size / (1024 * 1024)
             
-            # Auto-detect segmentation status
+            # Auto-detect segmentation status (lightweight check - only reads sample of data)
             has_segmentation = self.check_if_file_is_segmented(str(path))
             
             # Set status based on detection
@@ -536,6 +536,7 @@ class InspectorPanel(QWidget):
     def check_if_file_is_segmented(self, filepath):
         """
         Check if a NIfTI/DICOM file is a segmentation file using STRICT criteria.
+        OPTIMIZED: Only samples data instead of loading entire file.
         
         For NIfTI: Checks if file contains organ labels by analyzing voxel data:
         - Value range (max-min) must be ≤500 (raw CT has ~4000 range, segmentation has ~10)
@@ -554,26 +555,48 @@ class InspectorPanel(QWidget):
             ext = path.suffix.lower()
             
             if ext in [".nii", ".gz"]:
-                # NIfTI segmentation detection
+                # NIfTI segmentation detection - OPTIMIZED VERSION
                 try:
                     import nibabel as nib
                     import numpy as np
                     
                     img = nib.load(str(path))
-                    data = img.get_fdata()
                     
-                    # Get statistics
-                    data_min = float(np.min(data))
-                    data_max = float(np.max(data))
+                    # OPTIMIZATION: Sample only a small portion of the data (10% or max 1 million voxels)
+                    shape = img.shape
+                    total_voxels = np.prod(shape[:3])
+                    
+                    if total_voxels > 1_000_000:
+                        # For large files, use dataobj (lazy loading) and sample strategically
+                        data = img.dataobj
+                        
+                        # Sample from center slice and edges
+                        mid_z = shape[2] // 2
+                        sample_indices = [0, mid_z, shape[2] - 1]
+                        
+                        samples = []
+                        for z in sample_indices:
+                            # Take every 10th voxel from this slice
+                            slice_data = data[:, :, z]
+                            samples.append(slice_data[::10, ::10])
+                        
+                        sampled_data = np.concatenate([s.flatten() for s in samples])
+                    else:
+                        # For small files, load everything
+                        sampled_data = img.get_fdata().flatten()
+                    
+                    # Get statistics from sample
+                    data_min = float(np.min(sampled_data))
+                    data_max = float(np.max(sampled_data))
                     value_range = data_max - data_min
-                    unique_values = np.unique(data)
+                    unique_values = np.unique(sampled_data)
                     num_unique = len(unique_values)
                     
                     # Check if all values are integers
-                    all_integers = np.allclose(data, np.round(data))
+                    all_integers = np.allclose(sampled_data, np.round(sampled_data))
                     
                     # Check if has at least one non-zero label
-                    has_nonzero = np.any(data > 0)
+                    has_nonzero = np.any(sampled_data > 0)
                     
                     # STRICT criteria for segmentation detection
                     is_segmentation = (
@@ -584,24 +607,25 @@ class InspectorPanel(QWidget):
                         has_nonzero             # Has actual labels
                     )
                     
-                    print(f"🔍 NIfTI Analysis for {path.name}:")
-                    print(f"   Value range: {value_range:.2f} (max: {data_max:.2f}, min: {data_min:.2f})")
-                    print(f"   Unique values: {num_unique}")
-                    print(f"   All integers: {all_integers}")
-                    print(f"   Has non-zero: {has_nonzero}")
-                    print(f"   → Is segmentation: {is_segmentation}")
+                    # Only print debug info if verbose mode is needed
+                    # print(f"🔍 NIfTI Analysis for {path.name}:")
+                    # print(f"   Value range: {value_range:.2f} (max: {data_max:.2f}, min: {data_min:.2f})")
+                    # print(f"   Unique values: {num_unique}")
+                    # print(f"   All integers: {all_integers}")
+                    # print(f"   Has non-zero: {has_nonzero}")
+                    # print(f"   → Is segmentation: {is_segmentation}")
                     
                     return is_segmentation
                     
                 except ImportError:
-                    print(f"⚠️ nibabel not installed, cannot check NIfTI segmentation status")
+                    # print(f"⚠️ nibabel not installed, cannot check NIfTI segmentation status")
                     return False
                 except Exception as e:
                     print(f"⚠️ Error analyzing NIfTI file: {e}")
                     return False
             
             elif ext == ".dcm":
-                # DICOM segmentation detection
+                # DICOM segmentation detection - already fast (header only)
                 try:
                     import pydicom
                     ds = pydicom.dcmread(str(path), stop_before_pixels=True)
@@ -615,15 +639,15 @@ class InspectorPanel(QWidget):
                     
                     is_segmentation = (modality == "SEG" or sop_class == segmentation_sop)
                     
-                    print(f"🔍 DICOM Analysis for {path.name}:")
-                    print(f"   Modality: {modality}")
-                    print(f"   SOP Class: {sop_class}")
-                    print(f"   → Is segmentation: {is_segmentation}")
+                    # print(f"🔍 DICOM Analysis for {path.name}:")
+                    # print(f"   Modality: {modality}")
+                    # print(f"   SOP Class: {sop_class}")
+                    # print(f"   → Is segmentation: {is_segmentation}")
                     
                     return is_segmentation
                     
                 except ImportError:
-                    print(f"⚠️ pydicom not installed, cannot check DICOM segmentation status")
+                    # print(f"⚠️ pydicom not installed, cannot check DICOM segmentation status")
                     return False
                 except Exception as e:
                     print(f"⚠️ Error analyzing DICOM file: {e}")
