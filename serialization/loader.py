@@ -8,6 +8,9 @@ import nibabel as nib
 import pydicom
 from pydicom.dataset import FileDataset
 from typing import Optional, Dict, Any, Union, List
+from pathlib import Path
+from collections import defaultdict
+
 
 class DataLoader:
     """
@@ -82,50 +85,113 @@ class DataLoader:
             "metadata": metadata,
             "format": "dicom",
         }
+    
+    # def _load_dicom_series(self, folder_path: str) -> Dict[str, Any]:
+    #     """Load all DICOM files in a folder as a 3D volume"""
 
-    def _load_dicom_series(self, folder_path: str) -> Dict[str, Any]:
-        """Load all DICOM files in a folder as a 3D volume"""
+    #     files = []
+    #     for f in os.listdir(folder_path):
+    #         full_path = os.path.join(folder_path, f)
+    #         try:
+    #             ds = pydicom.dcmread(full_path, stop_before_pixels=True)
+    #             if hasattr(ds, "InstanceNumber"):
+    #                 files.append(full_path)
+    #         except Exception:
+    #             continue
 
-        files = []
-        for f in os.listdir(folder_path):
-            full_path = os.path.join(folder_path, f)
+    #     if not files:
+    #         raise ValueError("No valid DICOM files found in folder.")
+
+    #     # Sort by InstanceNumber or SliceLocation
+    #     dicoms: List[FileDataset] = []
+    #     for f in files:
+    #         try:
+    #             ds = pydicom.dcmread(f)
+    #             dicoms.append(ds)
+    #         except Exception as e:
+    #             print(f"Warning: Skipping {f}: {e}")
+
+    #     dicoms.sort(key=lambda d: getattr(d, "InstanceNumber", 0))
+    #     for d in dicoms:
+    #         print(d.SOPInstanceUID, d.pixel_array.shape)
+
+    #     # Stack into 3D volume
+    #     image_stack = np.stack([d.pixel_array for d in dicoms]).astype(np.float32)
+
+    #     voxel_spacing = self._get_dicom_spacing(dicoms[0])
+    #     orientation = self._compute_affine_series(dicoms)
+    #     metadata = self._extract_metadata(dicoms[0])
+
+    #     return {
+    #         "image": image_stack,            # [Z, Y, X]
+    #         "voxel_spacing": voxel_spacing,  # (dx, dy, dz)
+    #         "orientation": orientation,      # 4x4 matrix
+    #         "metadata": metadata,
+    #         "format": "dicom",
+    #     }
+
+    def _load_dicom_series(self, folder_path):
+        folder_path = Path(folder_path)
+        dicom_files = [f for f in folder_path.iterdir() if f.is_file()]
+        if not dicom_files:
+            raise ValueError(f"No files found in {folder_path}")
+
+        dicoms = []
+        for f in dicom_files:
             try:
-                ds = pydicom.dcmread(full_path, stop_before_pixels=True)
-                if hasattr(ds, "InstanceNumber"):
-                    files.append(full_path)
-            except Exception:
-                continue
-
-        if not files:
-            raise ValueError("No valid DICOM files found in folder.")
-
-        # Sort by InstanceNumber or SliceLocation
-        dicoms: List[FileDataset] = []
-        for f in files:
-            try:
-                ds = pydicom.dcmread(f)
+                ds = pydicom.dcmread(f, stop_before_pixels=True)
                 dicoms.append(ds)
             except Exception as e:
-                print(f"Warning: Skipping {f}: {e}")
+                print(f"⚠️ Skipping {f}: not a valid DICOM ({e})")
 
-        dicoms.sort(key=lambda d: getattr(d, "InstanceNumber", 0))
+        if not dicoms:
+            raise ValueError(f"No valid DICOM files in {folder_path}")
+
+        # Group by SeriesInstanceUID
+        series_dict = defaultdict(list)
+        for d in dicoms:
+            uid = getattr(d, "SeriesInstanceUID", None)
+            if uid:
+                series_dict[uid].append(pydicom.dcmread(d.filename))
+
+        if not series_dict:
+            raise ValueError("No DICOM series found in this folder.")
+
+        # Pick the largest one (most slices)
+        main_series = max(series_dict.values(), key=len)
+
+        # Sort by slice position
+        try:
+            main_series.sort(key=lambda d: float(d.ImagePositionPatient[2]))
+        except Exception:
+            pass
+
+        # Verify consistent shape
+        shapes = [d.pixel_array.shape for d in main_series]
+        if len(set(shapes)) > 1:
+            raise ValueError(f"Inconsistent slice shapes: {set(shapes)}")
 
         # Stack into 3D volume
-        image_stack = np.stack([d.pixel_array for d in dicoms]).astype(np.float32)
+        image_stack = np.stack([d.pixel_array for d in main_series]).astype(np.float32)
 
-        voxel_spacing = self._get_dicom_spacing(dicoms[0])
-        orientation = self._compute_affine_series(dicoms)
-        metadata = self._extract_metadata(dicoms[0])
+        slope = float(main_series[0].get("RescaleSlope", 1.0))
+        intercept = float(main_series[0].get("RescaleIntercept", 0.0))
+        image_stack = image_stack * slope + intercept
+
+        pixel_spacing = list(getattr(main_series[0], "PixelSpacing", [1, 1]))
+        slice_thickness = float(getattr(main_series[0], "SliceThickness", 1.0))
+        metadata = self._extract_metadata(main_series[0])
 
         return {
-            "image": image_stack,            # [Z, Y, X]
-            "voxel_spacing": voxel_spacing,  # (dx, dy, dz)
-            "orientation": orientation,      # 4x4 matrix
+            "image": image_stack,
             "metadata": metadata,
-            "format": "dicom",
+            "PatientName": str(getattr(main_series[0], "PatientName", "Unknown")),
+            "PatientID": str(getattr(main_series[0], "PatientID", "Unknown")),
+            "Modality": str(getattr(main_series[0], "Modality", "Unknown")),
+            "SeriesDescription": str(getattr(main_series[0], "SeriesDescription", "Unknown")),
+            "VoxelSpacing": pixel_spacing + [slice_thickness],
         }
-    
-    
+
     # ---------------------------------------------------------------
     # Helper methods
     # ---------------------------------------------------------------

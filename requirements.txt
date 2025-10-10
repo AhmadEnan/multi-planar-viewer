@@ -3,3 +3,6 @@ vtk
 nibabel
 pydicom
 numpy
+pylibjpeg
+pylibjpeg-libjpeg
+pylibjpeg-openjpeg
