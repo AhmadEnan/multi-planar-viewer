@@ -42,9 +42,10 @@ class MainWindow(QMainWindow):       # This the main class for managing GUI, dif
         self.inspector_frame_layout.addWidget(self.dummy_label)
 
 
-            # Create viewer manger            
-
-        self.viewer_manager = ViewerManager()       # pass the loaded nifti data nib.load(...)
+            # Create viewer manger
+        import nibabel as nib                               # for testing, replace it with serialization output
+        nifti_file = nib.load(r"test_data/scan.nii.gz")
+        self.viewer_manager = ViewerManager(nifti_file)       # pass the loaded nifti data ( e.g. nib.load(...) )
             
                                     # Comments For Anan
 

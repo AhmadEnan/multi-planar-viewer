@@ -41,8 +41,7 @@ class ViewerManager(QFrame):
 
         self.viewer_frame_layout.addWidget(self.toolbar, 0, 0, 1, 2)
 
-        # Load NIfTI file
-        self.nifti_file = nib.load(r'.\test_data\scan.nii.gz')        # for testing
+        # Preprocessing NIfTI data
         img_ras = nib.as_closest_canonical(self.nifti_file)
         self.affine = img_ras.affine
         self.inv_affine = np.linalg.inv(self.affine)

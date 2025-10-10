@@ -1,6 +1,6 @@
 How to deal with Viewport class:
 
-Input: the class expects to deal with a loaded NIFTY file, nib.load....
+Input: the class expects to deal with a loaded NIFTY file,   e.g. ( nib.load...)
 
 Note: do not enter image data only which is .get_fdata(), instead insert the whole data, as the class expects it to handels the data and converts the raw data to world space coordinate using the file affine data to control lines and ROI movements
 
