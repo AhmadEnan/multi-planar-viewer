@@ -1,0 +1,29 @@
+How to deal with Viewport class:
+
+Input: the class expects to deal with a loaded NIFTY file,   e.g. ( nib.load...)
+
+Note: do not enter image data only which is .get_fdata(), instead insert the whole data, as the class expects it to handels the data and converts the raw data to world space coordinate using the file affine data to control lines and ROI movements
+
+Output: you can get the data needed for the ROI exporting as file from the ViewManager class method extract_roi_data(), which retruns
+	None, if ROI is not activated
+	
+otherwise returns dict of the data as:
+
+	dict{
+          'data': numpy array containing the ROI data     		--> images data
+          'start': starting coordinates [i,j,k]		  		--> start of Voxels coordinates
+          'end': ending coordinates [i,j,k]		  		--> end of voxels coordinates
+          'shape': shape of the ROI [di,dj,dk]		  		--> shape: number of voxels in each direction = end - start
+          'world_start': starting coordinates in world space		--> coordinates also like start but in millimeter (mm) Not voxels
+          'world_end': ending coordinates in world space	
+          'affine': affine transformation matrix		
+	}
+
+if you only need 
+	dict{
+	  "start":
+	  "end" :
+	  "shape" :
+	}
+		
+you can just use get_roi_coordinates() in the ViewManager class too
