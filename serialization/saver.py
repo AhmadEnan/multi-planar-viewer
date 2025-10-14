@@ -81,8 +81,7 @@ def export_roi(data: Dict[str, Any], bounds: Tuple[int, int, int, int, int, int]
     else:
         raise ValueError(f"Unsupported export format: {fmt}")
 
-
-# Example usage (within PySide6 slot or testing)
+# Example usage 
 # -----------------------------------------------------------
 # bounds = (20, 80, 50, 150, 40, 140)  # example ROI indices
 # export_roi(data, bounds, 'roi_output.nii.gz', 'nifti')
