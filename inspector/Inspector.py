@@ -42,7 +42,7 @@ class InspectorPanel(QWidget):
         main_layout.setContentsMargins(15, 10, 15, 10)
         
         # ===== TITLE =====
-        title = QLabel("📁 Medical File Inspector - NIfTI + DICOM")
+        title = QLabel("Medical File Inspector - NIfTI + DICOM")
         title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setMaximumHeight(30)
@@ -53,7 +53,7 @@ class InspectorPanel(QWidget):
         browse_group.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         browse_layout = QVBoxLayout(browse_group)
         
-        self.btn_browse = QPushButton("🗂️  Browse Directory")
+        self.btn_browse = QPushButton("Browse Directory")
         self.btn_browse.setMinimumHeight(35)
         self.btn_browse.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_browse.clicked.connect(self.browse_directory)
@@ -78,7 +78,7 @@ class InspectorPanel(QWidget):
         left_container.setMinimumWidth(300)
         left_layout = QVBoxLayout(left_container)
         
-        file_list_title = QLabel("📄 Medical Files")
+        file_list_title = QLabel("Medical Files")
         file_list_title.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         left_layout.addWidget(file_list_title)
         
@@ -95,7 +95,7 @@ class InspectorPanel(QWidget):
         right_container.setMinimumWidth(300)
         right_layout = QVBoxLayout(right_container)
         
-        info_title = QLabel("📄 File Information")
+        info_title = QLabel("File Information")
         info_title.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         right_layout.addWidget(info_title)
         
@@ -118,7 +118,7 @@ class InspectorPanel(QWidget):
         main_layout.addLayout(content_layout, stretch=1)
         
         # ===== LOAD BUTTON =====
-        self.btn_load = QPushButton("🚀 Load Selected File")
+        self.btn_load = QPushButton("Proced to Viewer")
         self.btn_load.setMinimumHeight(45)
         self.btn_load.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_load.setEnabled(False)
@@ -284,13 +284,13 @@ class InspectorPanel(QWidget):
             # Store all files
             for file in all_files:
                 self.available_files.append(str(file))
-                self.file_list.addItem(f"📄 {file.name}")
+                self.file_list.addItem(f"{file.name}")
             
             # Update UI with correct count
             total_count = len(self.available_files)
             
             if total_count == 0:
-                self.file_list.addItem("❌ No NIfTI or DICOM files found in this directory")
+                self.file_list.addItem("No NIfTI or DICOM files found in this directory")
                 self.btn_load.setEnabled(False)
                 self.info_label.setText("No .nii, .nii.gz or .dcm files detected in the selected directory.")
             else:
@@ -331,7 +331,7 @@ class InspectorPanel(QWidget):
             has_segmentation = self.check_if_file_is_segmented(str(path))
             
             # Set status based on detection
-            segmentation_status = "✅ Already Segmented" if has_segmentation else "🤖 AI Segmentation Needed"
+            segmentation_status = "Already Segmented" if has_segmentation else "🤖 AI Segmentation Needed"
             segmentation_color = "#2a9d8f" if has_segmentation else "#f4a261"
             
             # Check file extension to determine type
@@ -352,18 +352,18 @@ class InspectorPanel(QWidget):
                     <div style="line-height: 1.6; font-size: 10pt;">
                     <h3 style="color: #98c1d9; margin-top: 0; margin-bottom: 12px;">File Details</h3>
                     
-                    <p><b>📁 Filename:</b> {path.name}</p>
+                    <p><b>Filename:</b> {path.name}</p>
                     
                     <div style="background-color: {segmentation_color}33; border-left: 4px solid {segmentation_color}; padding: 8px; margin: 10px 0; border-radius: 4px;">
                         <b style="color: {segmentation_color};">🏷️ Status:</b> {segmentation_status}
                     </div>
                     
-                    <p><b>📊 Format:</b> DICOM<br>
-                    <b>👤 Patient:</b> {patient}<br>
-                    <b>📷 Modality:</b> {modality}<br>
-                    <b>📅 Study Date:</b> {study_date}<br>
-                    <b>📏 Dimensions:</b> {rows} × {cols} (single slice)<br>
-                    <b>💾 File Size:</b> {file_size_mb:.2f} MB</p>
+                    <p><b>Format:</b> DICOM<br>
+                    <b>Patient:</b> {patient}<br>
+                    <b>Modality:</b> {modality}<br>
+                    <b>Study Date:</b> {study_date}<br>
+                    <b>Dimensions:</b> {rows} × {cols} (single slice)<br>
+                    <b>File Size:</b> {file_size_mb:.2f} MB</p>
                     
                     <p><b>🔧 Technical Info:</b><br>
                     • Header Verified: Yes<br>
@@ -375,16 +375,16 @@ class InspectorPanel(QWidget):
                     <div style="line-height: 1.6; font-size: 10pt;">
                     <h3 style="color: #98c1d9; margin-top: 0; margin-bottom: 12px;">File Details</h3>
                     
-                    <p><b>📁 Filename:</b> {path.name}</p>
+                    <p><b>Filename:</b> {path.name}</p>
                     
                     <div style="background-color: {segmentation_color}33; border-left: 4px solid {segmentation_color}; padding: 8px; margin: 10px 0; border-radius: 4px;">
                         <b style="color: {segmentation_color};">🏷️ Status:</b> {segmentation_status}
                     </div>
                     
-                    <p><b>📊 Format:</b> DICOM<br>
-                    <b>💾 File Size:</b> {file_size_mb:.2f} MB</p>
+                    <p><b>Format:</b> DICOM<br>
+                    <b>File Size:</b> {file_size_mb:.2f} MB</p>
                     
-                    <p><i>💡 For detailed DICOM information, install pydicom:</i><br>
+                    <p><i>For detailed DICOM information, install pydicom:</i><br>
                     <code style="background: #2b2b2b; padding: 4px; border-radius: 3px;">pip install pydicom</code></p>
                     </div>
                     """
@@ -393,8 +393,8 @@ class InspectorPanel(QWidget):
                     <div style="line-height: 1.6; font-size: 10pt;">
                     <h3 style="color: #e76f51; margin-top: 0; margin-bottom: 12px;">File Details</h3>
                     
-                    <p><b>📁 Filename:</b> {path.name}<br>
-                    <b>💾 File Size:</b> {file_size_mb:.2f} MB</p>
+                    <p><b>Filename:</b> {path.name}<br>
+                    <b>File Size:</b> {file_size_mb:.2f} MB</p>
                     
                     <p style='color: #e76f51;'>⚠️ Error reading DICOM header<br>
                     {str(e)}</p>
@@ -434,22 +434,22 @@ class InspectorPanel(QWidget):
                     <div style="line-height: 1.6; font-size: 10pt;">
                     <h3 style="color: #98c1d9; margin-top: 0; margin-bottom: 12px;">File Details</h3>
                     
-                    <p><b>📁 Filename:</b> {path.name}</p>
+                    <p><b>Filename:</b> {path.name}</p>
                     
                     <div style="background-color: {segmentation_color}33; border-left: 4px solid {segmentation_color}; padding: 8px; margin: 10px 0; border-radius: 4px;">
                         <b style="color: {segmentation_color};">🏷️ Status:</b> {segmentation_status}
                     </div>
                     
-                    <p><b>📊 Format:</b> NIfTI<br>
-                    <b>📏 Dimensions:</b> {dim_info}<br>
-                    <b>📐 Voxel Spacing:</b> {spacing_info}<br>
-                    <b>💾 Data Type:</b> {datatype}</p>
+                    <p><b>Format:</b> NIfTI<br>
+                    <b>Dimensions:</b> {dim_info}<br>
+                    <b>Voxel Spacing:</b> {spacing_info}<br>
+                    <b>Data Type:</b> {datatype}</p>
                     
-                    <p><b>📊 Statistics:</b><br>
+                    <p><b>Statistics:</b><br>
                     • Voxel Count: {voxel_count:,}<br>
                     • File Size: {file_size_mb:.2f} MB</p>
                     
-                    <p><b>🔧 Technical Info:</b><br>
+                    <p><b>Technical Info:</b><br>
                     • Affine Matrix: {'Yes' if affine is not None else 'No'}<br>
                     • Header: Valid<br>
                     • Integrity: ✓ Good</p>
@@ -460,7 +460,7 @@ class InspectorPanel(QWidget):
                     <div style="line-height: 1.6; font-size: 10pt;">
                     <h3 style="color: #98c1d9; margin-top: 0; margin-bottom: 12px;">File Details</h3>
                     
-                    <p><b>📁 Filename:</b> {path.name}</p>
+                    <p><b>Filename:</b> {path.name}</p>
                     
                     <div style="background-color: {segmentation_color}33; border-left: 4px solid {segmentation_color}; padding: 8px; margin: 10px 0; border-radius: 4px;">
                         <b style="color: {segmentation_color};">🏷️ Status:</b> {segmentation_status}
