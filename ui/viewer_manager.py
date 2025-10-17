@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QToolBar, QScrollBar, QSizePolicy
+from PySide6.QtWidgets import *
 from PySide6.QtCore import Qt, Signal, QRect, QPoint
 from PySide6.QtGui import QPixmap, QImage, QIcon, QAction, QPen, QPainter, QColor, QMouseEvent
 import nibabel as nib
@@ -20,6 +20,8 @@ class ViewerManager(QFrame):
             }""")
         
         self.viewer_frame_layout = QGridLayout(self)
+        self.viewer_frame_layout.setContentsMargins(0,0,0,0)
+        self.viewer_frame_layout.setSpacing(0)
         
         # Adding toolbar
         self.toolbar = QToolBar("Viewer Toolbar", self)
@@ -39,9 +41,56 @@ class ViewerManager(QFrame):
         self.toolbar.addAction(self.axis_action)
         self.axis_action.setCheckable(True)
 
+        self.toolbar.addSeparator()
+        
+        # Adding fourth view tools
+        oblique_icon = QIcon(r"icons/oblique_icon.png")
+        self.oblique_action = QAction(oblique_icon, "Show oblique view", self)
+        self.axis_action.setToolTip("Display oblique in the 4th view")
+        self.oblique_action.triggered.connect(self._show_oblique)
+        self.toolbar.addAction(self.oblique_action)
+        self.oblique_action.setCheckable(True)
+
+        outline_icon = QIcon(r"icons/outline_icon.png")
+        self.outline_action = QAction(outline_icon, "Show outline view", self)
+        self.axis_action.setToolTip("Display the organ outline in the 4th view")
+        self.outline_action.triggered.connect(self._show_outline)
+        self.toolbar.addAction(self.outline_action)
+        self.outline_action.setCheckable(True)
+
+            # Drop down to choose the required view to take data from it
+        self.base_view_to4th = None
+
+        self.tool_button = QToolButton(self)
+        self.tool_button.setToolTip("Choose a Base view to make the fourth view on it")
+        self.tool_button.setText("Base View")
+        self.tool_button.setStyleSheet("color: grey;")
+        self.tool_button.setEnabled(False)
+        # tool_button.setIcon(QIcon("path/to/your/icon.png")) # Optional: Set an icon
+        self.toolbar.addWidget(self.tool_button)
+
+        self.dropdown_menu = QMenu(self)
+        action1 = QAction("axial", self)
+        action2 = QAction("sagittal", self)
+        action3 = QAction("coronal", self)
+        self.dropdown_menu.addAction(action1)
+        self.dropdown_menu.addAction(action2)
+        self.dropdown_menu.addAction(action3)
+
+
+        action1.triggered.connect(lambda: self._set_base_view("axial"))
+        action2.triggered.connect(lambda: self._set_base_view("sagittal"))
+        action3.triggered.connect(lambda: self._set_base_view("coronal"))
+
+        self.tool_button.setMenu(self.dropdown_menu)
+        self.tool_button.setPopupMode(QToolButton.MenuButtonPopup) # Or QToolButton.DelayedPopup, QToolButton.MenuButtonPopup
+        self.dropdown_menu.popup(self.tool_button.mapToGlobal(self.tool_button.rect().bottomLeft()))
+
+        self.toolbar.addSeparator()
+
         self.viewer_frame_layout.addWidget(self.toolbar, 0, 0, 1, 2)
 
-        # Preprocessing NIfTI data
+        # Preprocessing NIFTI data
         img_ras = nib.as_closest_canonical(self.nifti_file)
         self.affine = img_ras.affine
         self.inv_affine = np.linalg.inv(self.affine)
@@ -94,12 +143,42 @@ class ViewerManager(QFrame):
         self.viewports['coronal'] = ViewPort(self, orientation='coronal')
         self.viewer_frame_layout.addWidget(self.viewports['coronal'], 2, 0)
 
+        self.fourth_view = Fourthview(self)
+        self.viewer_frame_layout.addWidget(self.fourth_view, 2, 1)
+
         # Connect crosshair signals
         for vp in self.viewports.values():
             vp.img_label.crosshair_clicked.connect(self._on_crosshair_moved)
 
         # Initial display
         self._update_all_views()
+    
+
+    def _set_base_view(self, view):
+        self.base_view_to4th = view
+        self.tool_button.setText(view)
+        
+
+    def _show_oblique(self):
+        if self.oblique_action.isChecked() == False:
+            self.tool_button.setEnabled(False)
+            self.tool_button.setStyleSheet("color: grey;")
+        else:
+            self.tool_button.setEnabled(True)
+            self.tool_button.setStyleSheet("color: #E0E0E0;")
+            self.outline_action.setChecked(False)
+        
+
+    def _show_outline(self):
+        if self.outline_action.isChecked() == False:
+            self.tool_button.setEnabled(False)
+            self.tool_button.setStyleSheet("color: grey;")
+        else:
+            self.tool_button.setEnabled(True)
+            self.tool_button.setStyleSheet("color: #E0E0E0;")
+            self.oblique_action.setChecked(False)
+
+
 
     def _voxel_to_world(self, voxel):
         """Convert voxel coordinates to world coordinates"""
@@ -165,6 +244,7 @@ class ViewerManager(QFrame):
         self.viewports['axial'].update_view(int(round(k)), self.cursor_voxel)
         self.viewports['sagittal'].update_view(int(round(i)), self.cursor_voxel)
         self.viewports['coronal'].update_view(int(round(j)), self.cursor_voxel)
+
     def _toggle_axes(self, checked):
         """Toggle crosshair display and interaction"""
         self.crosshair_enabled = checked
@@ -416,6 +496,7 @@ class ImageLabel(QLabel):
                 elif self.orientation == "coronal":
                     v_color = QColor(0, 255, 0)  # Green vertical line controls sagittal
                     h_color = QColor(255, 255, 0)  # Yellow horizontal line controls axial
+            
                 else:
                     v_color = h_color = QColor(255, 255, 255)
                 
@@ -459,13 +540,14 @@ class ImageLabel(QLabel):
 
 
 class ViewPort(QFrame):
-    def __init__(self, manager, orientation='axial'):
+    def __init__(self, manager, orientation=None):
         super().__init__()
         
         self.manager = manager
         self.orientation = orientation
         
         self.setFrameShape(QFrame.StyledPanel)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setStyleSheet("""
             QFrame {
                 border-radius: 0px;
@@ -516,6 +598,61 @@ class ViewPort(QFrame):
         
         # Initial display
         self.display_slice(self.current_slice)
+
+        # Put Anatomical positions labels
+        if self.orientation == "axial":
+            self.labels = {
+                "top": QLabel("A", self),
+                "bottom": QLabel("P", self),
+                "left": QLabel("R", self),
+                "right": QLabel("L", self),
+            }
+        elif self.orientation == "sagittal":
+            self.labels = {
+                "top": QLabel("S", self),
+                "bottom": QLabel("I", self),
+                "left": QLabel("A", self),
+                "right": QLabel("P", self),
+            }
+        elif self.orientation == "coronal":
+            self.labels = {
+                "top": QLabel("S", self),
+                "bottom": QLabel("I", self),
+                "left": QLabel("R", self),
+                "right": QLabel("L", self),
+            }
+
+        # Style all labels to appear bright and clear
+        for lbl in self.labels.values():
+            lbl.setStyleSheet("""
+                color: yellow;
+                font: bold 16px 'Arial';
+                background: transparent;
+                border: none;
+            """)
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.raise_()  # ensure on top of image
+        self._draw_anatomical_lables(None)  # Initial positioning
+
+    def _draw_anatomical_lables(self, event):
+        """Keep image and labels correctly positioned"""
+        w, h = self.width(), self.height()
+        margin = 10
+
+        # Image fills the entire frame
+        self.img_label.setGeometry(0, 0, w, h)
+
+        # Center the labels around the frame edges
+        for lbl in self.labels.values():
+            lbl.adjustSize()
+    
+        self.labels["top"].move(w // 2, margin)
+        self.labels["bottom"].move(w  // 2, h - self.labels["bottom"].height() - margin)
+        self.labels["left"].move(margin + self.side_bar.width(), (h - self.labels["left"].height()) // 2)
+        self.labels["right"].move(w - self.labels["right"].width() - margin, (h - self.labels["right"].height()) // 2)
+
+
+
 
     def get_aspect_ratio(self):
         """Calculate physical aspect ratio"""
@@ -754,11 +891,11 @@ class ViewPort(QFrame):
         
         # Update ROI bounds based on orientation
         if self.orientation == 'axial':
-            delta_i = voxel_dy  # Moving down increases i
-            delta_j = voxel_dx  # Moving right increases j
+            delta_i = voxel_dx  # Moving right increases i
+            delta_j = voxel_dy  # Moving down increases j
             
             new_start = self.manager.roi_start.copy()
-            new_start[0] += delta_i
+            new_start[0] -= delta_i
             new_start[1] += delta_j
             
         elif self.orientation == 'sagittal':
@@ -774,7 +911,7 @@ class ViewPort(QFrame):
             delta_k = -voxel_dy  # Moving up increases k
             
             new_start = self.manager.roi_start.copy()
-            new_start[0] += delta_i
+            new_start[0] -= delta_i
             new_start[2] += delta_k
             
         # Clamp new position to valid bounds
@@ -840,6 +977,7 @@ class ViewPort(QFrame):
                 self.crosshair_pos = self.voxel_to_image_coords(self.manager.cursor_voxel)
                 self.roi_rect = self.get_roi_in_image_coords()
                 self.img_label.update()
+        self._draw_anatomical_lables(event)
 
     def wheelEvent(self, event):
         delta = event.angleDelta().y()
@@ -945,3 +1083,33 @@ class NavBar(QFrame):
         self.scrollbar.blockSignals(True)
         self.scrollbar.setValue(slice_idx)
         self.scrollbar.blockSignals(False)
+
+
+class Fourthview(QFrame):
+    def __init__(self, parent=None, mode="oblique", segmentation_mask=None, oblique_data=[]):
+        super().__init__(parent)
+        self.mode = mode
+        self.segmentation_mask = segmentation_mask
+        self.oblique_data = oblique_data
+
+    def set_mode(self, mode):
+        self.mode = mode
+        self.update_view()
+
+    def update_view(self):
+        if self.mode == "oblique":
+            img = self.oblique_slice
+        elif self.mode == "outline" and self.segmentation_mask is not None:
+            img = self.extract_outline(self.segmentation_mask)
+        else:
+            img = np.zeros((256,256))  # fallback blank
+        self.display_image(img)
+
+    def extract_outline(self, mask):
+        import cv2, numpy as np
+        contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        outline = np.zeros_like(mask)
+        cv2.drawContours(outline, contours, -1, color=255, thickness=1)
+        return outline
+
+    
