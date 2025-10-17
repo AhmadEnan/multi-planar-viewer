@@ -16,8 +16,7 @@ from PIL import Image
 # CONFIGURATION
 # ============================================================================
 
-MODEL_CHECKPOINT = "model_checkpoint/mri_orientation_finetuned.pth"
-MRI_FOUNDATION_PATH = "C:/Users/Hakeem/Desktop/mri_foundation"  # Path to cloned MRI Foundation repo
+MODEL_CHECKPOINT = "ai/model_checkpoint/mri_orientation_finetuned.pth"
 IMAGE_SIZE = (1024, 1024)
 NUM_CLASSES = 3
 
@@ -120,9 +119,10 @@ class MRIOrientationClassifier:
             raise FileNotFoundError(f"Checkpoint not found: {self.checkpoint_path}")
         
         try:
-            from models.sam import sam_model_registry
-            import cfg
             
+            from ai.models.sam import sam_model_registry
+            import ai.cfg as cfg
+
             print("Loading SAM-based model...")
             
             # Load args using the cfg module
@@ -339,7 +339,7 @@ if __name__ == "__main__":
     # Initialize classifier
     classifier = MRIOrientationClassifier(
         checkpoint_path=MODEL_CHECKPOINT,
-        mri_foundation_path=MRI_FOUNDATION_PATH,
+        mri_foundation_path=None,
         device="cuda"  # or "cpu"
     )
 
