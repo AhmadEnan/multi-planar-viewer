@@ -28,10 +28,11 @@ class InspectorPanel(QWidget):
     # Signal emitted when file is loaded: (filepath, has_segmentation)
     file_selected = Signal(str, bool)
     
-    def __init__(self):
+    def __init__(self, main):
         super().__init__()
         self.current_directory = None
         self.available_files = []
+        self.main = main
         self.setup_ui()
         self.apply_styles()
     
@@ -118,7 +119,7 @@ class InspectorPanel(QWidget):
         main_layout.addLayout(content_layout, stretch=1)
         
         # ===== LOAD BUTTON =====
-        self.btn_load = QPushButton("Proced to Viewer")
+        self.btn_load = QPushButton("Proceed to Viewer")
         self.btn_load.setMinimumHeight(45)
         self.btn_load.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_load.setEnabled(False)
@@ -530,6 +531,7 @@ class InspectorPanel(QWidget):
         
         # Show confirmation
         self.show_load_confirmation(filepath, has_segmentation)
+        self.main.load_path_and_open_viewer(filepath, self.current_directory)
     
     # ========== HELPER METHODS ==========
     
@@ -717,20 +719,13 @@ class InspectorPanel(QWidget):
 
 
 # ========== STANDALONE TEST ==========
-if __name__ == '__main__':
+def open_inspector_view():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     
     inspector = InspectorPanel()
     inspector.setWindowTitle("Medical File Inspector - NIfTI + DICOM")
     inspector.resize(800, 700)
-    
-    def on_file_loaded(filepath, has_seg):
-        print(f"Signal received!")
-        print(f"  Filepath: {filepath}")
-        print(f"  Has segmentation: {has_seg}")
-    
-    inspector.file_selected.connect(on_file_loaded)
     
     inspector.show()
     sys.exit(app.exec())

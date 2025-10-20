@@ -28,12 +28,13 @@ class InspectorPanelVertical(QWidget):
     # Signal emitted when file is loaded: (filepath, has_segmentation)
     file_selected = Signal(str, bool)
     
-    def __init__(self):
+    def __init__(self, main):
         super().__init__()
         self.current_directory = None
         self.available_files = []
         self.setup_ui()
         self.apply_styles()
+        self.main = main
     
     def setup_ui(self):
         """Create the vertical user interface"""
@@ -418,6 +419,8 @@ class InspectorPanelVertical(QWidget):
         print(f"   Path: {filepath}")
         print(f"   Segmented: {'Yes' if has_segmentation else 'No'}")
         print(f"{'='*50}\n")
+
+        self.main.load_path(filepath)
     
     # ========== HELPER METHODS ==========
     

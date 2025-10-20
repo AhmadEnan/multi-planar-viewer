@@ -8,12 +8,12 @@ from scipy.ndimage import map_coordinates
 
 
 class ViewerManager(QFrame):
-    def __init__(self, loaded_nifti=None):
+    def __init__(self, loaded_nifti=None, segmentation_mask=None, main_organ=None, orientation=None):
         super().__init__()
 
         self.nifti_file = loaded_nifti
         self.fourth_view_mode = None
-        self.segmentation_mask = r"test_data/segmentations\liver.nii.gz"
+        self.segmentation_mask = segmentation_mask
         
         self.setFrameShape(QFrame.StyledPanel)
         self.setStyleSheet("""
@@ -87,6 +87,43 @@ class ViewerManager(QFrame):
         self.tool_button.setPopupMode(QToolButton.MenuButtonPopup)
 
         self.toolbar.addSeparator()
+        
+        # Adding CINE tools
+        self.cine_action = QAction("▶️", self)
+        self.cine_action.setToolTip("Display the organ outline in the 4th view")
+        self.cine_action.triggered.connect(self.play_cine)
+        self.toolbar.addAction(self.cine_action)
+        self.cine_action.setCheckable(True)
+
+        # Drop down to choose the required view
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.play_cine)
+        self.is_playing = False
+        self.cine_speed = 1
+        self.cine_menu_button = QToolButton(self)
+        self.cine_menu_button.setToolTip("Choose the speed of of Cine")
+        self.cine_menu_button.setText(f"{self.cine_speed}x")
+        # self.cine_menu_button.setStyleSheet("color: grey;")
+        # self.cine_menu_button.setEnabled(False)
+        self.toolbar.addWidget(self.cine_menu_button)
+
+        self.speed_menu = QMenu(self)
+        action1 = QAction("0.5x", self)
+        action2 = QAction("1x", self)
+        action3 = QAction("2x", self)
+        self.speed_menu.addAction(action1)
+        self.speed_menu.addAction(action2)
+        self.speed_menu.addAction(action3)
+
+        action1.triggered.connect(lambda: self._set_cine_speed(0.5))
+        action2.triggered.connect(lambda: self._set_cine_speed(1))
+        action3.triggered.connect(lambda: self._set_cine_speed(2))
+
+        self.cine_menu_button.setMenu(self.speed_menu)
+        self.cine_menu_button.setPopupMode(QToolButton.MenuButtonPopup)
+
+        
+        self.toolbar.addSeparator()
         self.viewer_frame_layout.addWidget(self.toolbar, 0, 0, 1, 2)
 
         # Preprocessing NIFTI data
@@ -157,7 +194,59 @@ class ViewerManager(QFrame):
 
         # Initial display
         self._update_all_views()
+
+        # Adding orientation and main organ name
+        # Example inside your main viewer layout
+        info_layout = QHBoxLayout()
+        self.orientation_label = QLabel("Orientation: " + orientation)
+        self.organ_label = QLabel("Organ: " + main_organ)
+
+        for lbl in (self.orientation_label, self.organ_label):
+            lbl.setStyleSheet("color: white; font-weight: bold;")
+
+        info_layout.addWidget(self.orientation_label)
+        info_layout.addStretch()
+        info_layout.addWidget(self.organ_label)
+
+        self.viewer_frame_layout.addLayout(info_layout, 3, 0)
+
     
+    def _set_cine_speed(self, speed):
+        self.cine_speed = speed
+        self.cine_menu_button.setText(f"{speed}x")
+
+
+    def play_cine(self):
+        """Starts or stops the cine playback."""
+        if self.cine_action.isChecked():
+            self.cine_action.setText("⏸️")
+            # Calculate frame interval (in ms)
+            # Example: 1x = 100 ms per frame, 0.5x = slower, 2x = faster
+            base_interval = 100  # ms
+            interval = int(base_interval / self.cine_speed)
+            self.next_slice()
+            self.timer.start(interval)
+        else:
+            self.stop_cine()
+            self.cine_action.setText("▶️")
+
+    def stop_cine(self):
+        """Stops cine playback."""
+        self.timer.stop()
+        self.is_playing = False
+
+    def next_slice(self):
+        """Advance to the next slice each frame."""
+        for viewport in self.viewports.values():
+            viewport.current_slice += 1
+            if viewport.current_slice >= viewport.max_slices:
+                viewport.current_slice = 0  # loop back
+            self.display_slice(viewport.current_slice, viewport.side_bar)
+
+    def display_slice(self, index, sidebar):
+        sidebar.setValue(index, False)
+
+
     def _set_base_view(self, view):
         self.base_view_to4th = view
         self.tool_button.setText(view)
@@ -198,8 +287,6 @@ class ViewerManager(QFrame):
             self.tool_button.setEnabled(True)
             self.tool_button.setStyleSheet("color: #E0E0E0;")
             self.oblique_action.setChecked(False)
-            self.axis_action.setChecked(False)
-            self.roi_action.setChecked(False)
             self._toggle_axes(False)
             self._toggle_roi(False)
             self.fourth_view_mode = "outline"
@@ -272,7 +359,9 @@ class ViewerManager(QFrame):
             self.tool_button.setStyleSheet("color: grey;")
             self.outline_action.setChecked(False)
             self.oblique_action.setChecked(False)
-
+            self._show_oblique()
+            self._show_outline()
+            
         for viewport in self.viewports.values():
             viewport.img_label.show_crosshair = checked
             viewport.img_label.update()
@@ -289,6 +378,9 @@ class ViewerManager(QFrame):
             viewport.img_label.show_roi = checked
             viewport.update_view(viewport.current_slice, self.cursor_voxel)
 
+    def get_roi_voxel_coordinates(self):
+        """Returns the ROI start and end coordinates in voxel space"""
+        return (*self.roi_start.copy(), *self.roi_end.copy())
 
 class ImageLabel(QLabel):
     crosshair_clicked = Signal(object, float, float)
@@ -1108,10 +1200,13 @@ class NavBar(QFrame):
         self.scrollbar.valueChanged.connect(on_scroll_value_changed)
         layout.addWidget(self.scrollbar)
 
-    def setValue(self, slice_idx):
-        self.scrollbar.blockSignals(True)
-        self.scrollbar.setValue(slice_idx)
-        self.scrollbar.blockSignals(False)
+    def setValue(self, slice_idx, block_signal=True):
+        if block_signal:
+            self.scrollbar.blockSignals(True)
+            self.scrollbar.setValue(slice_idx)
+            self.scrollbar.blockSignals(False)
+        else:
+            self.scrollbar.setValue(slice_idx)
 
 
 

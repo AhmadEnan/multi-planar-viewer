@@ -44,11 +44,11 @@ def crop_roi(data: Dict[str, Any], bounds: Tuple[int, int, int, int, int, int]) 
     }
 
 
-def export_nifti(cropped_data: Dict[str, Any], output_path: str):
+def export_nifti(cropped_data: Dict[str, Any], header, output_path: str):
     """Export a cropped ROI to a NIfTI (.nii or .nii.gz) file."""
     img = cropped_data["image"]
     affine = cropped_data["orientation"]
-    nii = nib.Nifti1Image(img, affine)
+    nii = nib.Nifti1Image(img, affine, header=header)
     nib.save(nii, output_path)
 
 
@@ -70,12 +70,12 @@ def export_dicom(cropped_data: Dict[str, Any], output_folder: str):
         writer.Execute(slice_i)
 
 
-def export_roi(data: Dict[str, Any], bounds: Tuple[int, int, int, int, int, int], output_path: str, fmt: str):
+def export_roi(data: Dict[str, Any], bounds: Tuple[int, int, int, int, int, int], output_path: str, fmt: str, header=None):
     """High-level helper for exporting ROI to NIfTI or DICOM."""
     cropped = crop_roi(data, bounds)
 
     if fmt.lower() in ["nii", "nifti", ".nii", ".nii.gz"]:
-        export_nifti(cropped, output_path)
+        export_nifti(cropped, header, output_path)
     elif fmt.lower() == "dicom":
         export_dicom(cropped, output_path)
     else:

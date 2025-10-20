@@ -1,12 +1,18 @@
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt, QTimer
 import sys
 import torch
+import nibabel as nib
 from ui.viewer_manager import ViewerManager
 from serialization.loader import DataLoader
+from serialization import saver 
 from ai.orientation_classification import MRIOrientationClassifier
-from inspector import Inspector, inspectorVer
-
+from ai.segmentator import OrganSegmentator
+from inspector.inspectorVer import InspectorPanelVertical
+from inspector.Inspector import InspectorPanel, open_inspector_view
+from collections import Counter
+import csv
 
 
 # The main class which manage the inputs and output of all other classes
@@ -16,20 +22,38 @@ class Main:
 
 
         # Opening the Inespector at the start of the app
+    
+        self.current_file_path = None
+        self.main_inspector = InspectorPanel(self)
+        self.main_inspector.show()
 
-        self.current_file_path = r"test_data\scan.nii.gz"
+
         # Loading file
-        import nibabel as nib
-
+    def load_data(self):
         loader = DataLoader(self.current_file_path)
 
-        data = loader.load()
-        img, affine = data["image"], data[ "orientation"]
+        
+        self.data = loader.load()
+        img, affine = self.data["image"], self.data[ "orientation"]
+        self.header = self.data.get("header", None)
         self.nifti_data = nib.Nifti1Image(img, affine)
 
-        self.open_viewer()
-        
+        self.csv_path, self.seg_out_path = self.run_segmentator_ai()
+        self.orientation = self.run_classifier_ai()
 
+
+    def load_path(self, path):
+        self.current_file_path = path
+        self.load_data()
+        self.window.update_viewer()
+
+
+    def load_path_and_open_viewer(self, path, folder):
+        self.current_file_path = path
+        self.current_directory = folder
+        self.main_inspector.close()
+        self.load_data()
+        self.open_viewer()
 
     def run_classifier_ai(self):
         "Initialize classifier"
@@ -46,7 +70,7 @@ class Main:
         coronal_count = 0
         for i in range(0 , img.shape[2], 40):
             print(f"\nPredicting for NIfTI slice {i}")
-            result = classifier.predict_from_nifti(nifti_file=self.nifti_data, slice_index=i)
+            result = classifier.predict_from_nifti(self.nifti_data, slice_index=i)
             if result['orientation'] == 'Axial':
                 axial_count += 1
             if result['orientation'] == 'Coronal':
@@ -68,33 +92,61 @@ class Main:
 
         predicted_orientation = max(counts, key=counts.get)
         print(f'Final Prediction : {predicted_orientation}')
+        return predicted_orientation
 
-    
-
-    def open_inspector(self):
-        "Open the inspector side window"
-        pass
-    
+    def run_segmentator_ai(self):
+        "Initialize segmentator"
+        organ_segmentator = OrganSegmentator()
+        output_path = "segmentations_out"
+        csv_path = organ_segmentator.segment(
+            self.current_file_path,  # -------> Input path
+            organs=["liver", 'brain', 'spleen', 'kidney_right', 'kidney_left',
+                    'heart', 'stomach'],  # List of organs to segment
+            output_path="segmentations_out"
+        )
+        print(f"Segmentation CSV saved at: {csv_path}")
+        return csv_path, output_path
 
     def open_viewer(self):
         "Open the Main Window GUI"
-        window = MainWindow(self.nifti_data)
-        window.showMaximized()
+        self.window = MainWindow(self, self.nifti_data)
+        self.window.show()
+        QTimer.singleShot(50, self.window.showMaximized)
 
-        sys.exit(app.exec())
+
+    def export_roi(self):
+        if self.window.export_roi_action:
+            roi_voxels_coordinates = self.window.viewer_manager.get_roi_voxel_coordinates()
+            saver.export_roi(self.data, roi_voxels_coordinates, "exported_roi/exported_roi.nii.gz", fmt="nifti", header=self.header)
+            print("ROI exported to: exported_roi/exported_roi.nii.gz")
+        else:
+            print("No ROI selected for export.")
+        
+        
 
 
 # This the main class for managing GUI
 class MainWindow(QMainWindow):
-    def __init__(self, nifti_data):
+    def __init__(self, main, nifti_data):
         super().__init__()
-
+        self.main = main
         self.setWindowTitle("MPR Viewer")
 
         # Create a menubar
         self.menu = self.menuBar()
         self.menu.setStyleSheet("background-color: #2d2d2d; color: white;")
         self.file_menu = self.menu.addMenu("&File")
+
+        self.open_action = QAction("&Open", self)
+        self.open_action.setShortcut("Ctrl+O")
+
+        self.export_roi_action = QAction("&Export ROI", self)
+        self.export_roi_action.setShortcut("Ctrl+E")
+
+        self.file_menu.addAction(self.open_action)
+        self.file_menu.addAction(self.export_roi_action)
+
+        self.export_roi_action.triggered.connect(self.main.export_roi)
 
         # create central widget and layout
         self.central_widget = QWidget()
@@ -118,20 +170,54 @@ class MainWindow(QMainWindow):
         self.inspector_frame_layout.setStretch(0,1)
 
         # Adding Viewer Manager
-        self.viewer_manager = ViewerManager(nifti_data)
+        organ = self.most_common_organ(self.main.csv_path)
+        print(f'Main organ: {organ}')
+        self.viewer_manager = ViewerManager(nifti_data, segmentation_mask=f'{self.main.seg_out_path}/{organ}.nii.gz', main_organ=organ, orientation=self.main.orientation)
         self.open_side_inspector()
 
+        self.open_action.triggered.connect(self.inspector.browse_directory)
 
         # Add frames to the central widget layout
         self.central_widget_layout.addWidget(self.inspector_frame, 1)
         self.central_widget_layout.addWidget(self.viewer_manager, 4)
+
+    def update_viewer(self):
+        if hasattr(self, 'viewer_manager'):
+            self.central_widget_layout.removeWidget(self.viewer_manager)
+            self.viewer_manager.deleteLater()
+            organ = self.most_common_organ(self.main.csv_path)
+            print(f'Main organ: {organ}')
+            self.viewer_manager = ViewerManager(self.main.nifti_data, segmentation_mask=f'{self.main.seg_out_path}/{organ}.nii.gz', main_organ=organ, orientation=self.main.orientation)
+            self.central_widget_layout.addWidget(self.viewer_manager, 4)
+            
+    def most_common_organ(self,csv_path):
+        organ_counts = Counter()
+
+        with open(csv_path, newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                organs = [org.strip().lower() for org in row["Organs_Present"].split(';')]
+                for organ in organs:
+                    if organ and organ != "none":
+                        organ_counts[organ] += 1
+
+        most_common = organ_counts.most_common(1)
+        if most_common:
+            organ, count = most_common[0]
+            return organ
+        else:
+            return None
         
     def open_side_inspector(self):
         "Adding inspector content in the inspector frame"
-        self.inspector = inspectorVer.InspectorPanelVertical()
+        self.inspector = InspectorPanelVertical(self.main)
+        self.inspector.current_directory = self.main.current_directory
+        self.inspector.update_directory_display(self.main.current_directory)
+        self.inspector.scan_directory()
         self.inspector_frame_layout.addWidget(self.inspector)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     main = Main()
+    sys.exit(app.exec())

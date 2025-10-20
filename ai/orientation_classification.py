@@ -192,19 +192,19 @@ class MRIOrientationClassifier:
             dict: Contains 'orientation' (label name), 'label' (class index), 
                   and 'confidence' (softmax probability)
         """
-        try:
-            import nibabel as nib
-        except ImportError:
-            raise ImportError("nibabel is required. Install it with: pip install nibabel")
+        # try:
+        #     import nibabel as nib
+        # except ImportError:
+        #     raise ImportError("nibabel is required. Install it with: pip install nibabel")
         
-        print(f"Loading NIfTI file: {nifti_path}")
+        # print(f"Loading NIfTI file: {nifti_path}")
         
-        if not os.path.exists(nifti_path):
-            raise FileNotFoundError(f"NIfTI file not found: {nifti_path}")
+        # if not os.path.exists(nifti_path):
+        #     raise FileNotFoundError(f"NIfTI file not found: {nifti_path}")
         
-        # Load NIfTI file
-        nifti = nib.load(nifti_path)
-        data = nifti.get_fdata()
+        # # Load NIfTI file
+        # nifti = nib.load(nifti_path)
+        data = nifti_path.get_fdata()
         
         print(f"NIfTI shape: {data.shape}")
         

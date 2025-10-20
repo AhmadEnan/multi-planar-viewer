@@ -8,7 +8,7 @@ class OrganSegmentator:
     def __init__(self):
         pass
 
-    def segment(self, input_path, organ_name="liver", output_path="output"):
+    def segment(self, input_path, organs="liver", output_path="output"):
         """
         Segments organs and creates a CSV mapping slices to organs
         """
@@ -19,10 +19,10 @@ class OrganSegmentator:
                 print(f"Segmentation output already exists at {output_path}. Skipping segmentation.")
             else:
                 # Directory exists but no segmentation files, run segmentation
-                self._run_segmentation(input_path, organ_name, output_path)
+                self._run_segmentation(input_path, organs, output_path)
         else:
             # Directory doesn't exist or is empty, run segmentation
-            self._run_segmentation(input_path, organ_name, output_path)
+            self._run_segmentation(input_path, organs, output_path)
         
         # Generate CSV mapping slices to organs, placeholder until we find a model that does this
         csv_path = os.path.join(output_path, "slice_organ_mapping.csv")
@@ -30,19 +30,20 @@ class OrganSegmentator:
         
         return csv_path
 
-    def _run_segmentation(self, input_path, organ_name, output_path):
+    def _run_segmentation(self, input_path, organs, output_path):
         """
         Runs the actual segmentation process
         """
         totalsegmentator(
             input=input_path,
             output=output_path,
-            task=organ_name,  
+            roi_subset = organs,
+            task='total',  
             fast=True,
             body_seg=True,
             force_split=False,
             nr_thr_saving=1,
-            device='cpu'
+            device= "cpu"
         )
         print(f"Segmentation completed. Results saved to {output_path}")
 
@@ -128,8 +129,9 @@ class OrganSegmentator:
 if __name__ == "__main__":
     organ_segmentator = OrganSegmentator()
     csv_path = organ_segmentator.segment(
-        "data/ct.nii.gz",  # -------> Input path
-        organ_name="total",
+        "test_data/scan.nii.gz",  # -------> Input path
+        organs=["liver", 'brain', 'spleen', 'kidney_right', 'kidney_left',
+                'heart', 'stomach'],  # List of organs to segment
         output_path="segmentations_out"
     )
 
