@@ -13,7 +13,7 @@ Developed with performance, usability, and robustness in mind, this viewer effic
 
 * **🖼️ Multi-Planar Viewing (MPR):**
   Visualize images simultaneously across **axial**, **sagittal**, **coronal**, and **oblique** planes.
-  
+
 * **🧩 Orientation Detection Model:**
   A custom deep learning model that automatically determines the anatomical orientation (axial, coronal, sagittal, etc.) of the loaded image data by analyzing slice patterns and spatial consistency.
   This ensures accurate alignment and reliable multi-planar visualization — even when metadata is missing or inconsistent.
@@ -71,8 +71,11 @@ Developed with performance, usability, and robustness in mind, this viewer effic
    ```bash
    pip install -r requirements.txt
    ```
-
-3. **Run the viewer**
+3. **Install orientation model weights**
+   - follow this [[link](https://drive.google.com/file/d/1UbJfOK897rJ13WNOvuHcBbh6bC4P3B1a/view?usp=sharing)]
+   - paste the file inside ai/model_checkpoints.
+    
+5. **Run the viewer**
 
    ```bash
    python main.py
@@ -123,7 +126,7 @@ The project’s objective was to design a comprehensive tool capable of **loadin
 * Ahmed Mamdouh Anan
 * Ziad Ashraf Mostafa
 * Yahya Ismail
-* Hakeem Taha
+* Hakeem Mohammed
 
 > Supervised by **Prof. Tamer Basha**
 
