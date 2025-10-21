@@ -13,8 +13,7 @@ Developed with performance, usability, and robustness in mind, this viewer effic
 
 * **🖼️ Multi-Planar Viewing (MPR):**
   Visualize images simultaneously across **axial**, **sagittal**, **coronal**, and **oblique** planes.
-Here’s a concise, well-written section you can insert into your existing README — ideally **after the “Key Features”** or **before the “System Requirements”** section:
-
+  
 * **🧩 Orientation Detection Model:**
   A custom deep learning model that automatically determines the anatomical orientation (axial, coronal, sagittal, etc.) of the loaded image data by analyzing slice patterns and spatial consistency.
   This ensures accurate alignment and reliable multi-planar visualization — even when metadata is missing or inconsistent.
