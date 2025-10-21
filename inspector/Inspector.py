@@ -522,6 +522,9 @@ class InspectorPanel(QWidget):
             return
         
         filepath = self.available_files[current_row]
+
+        if ".dcm" in filepath:
+            filepath = str(Path(filepath).parent)  # Load entire DICOM folder
         
         # Auto-detect segmentation status
         has_segmentation = self.check_if_file_is_segmented(filepath)
@@ -531,7 +534,7 @@ class InspectorPanel(QWidget):
         
         # Show confirmation
         self.show_load_confirmation(filepath, has_segmentation)
-        self.main.load_path_and_open_viewer(filepath, self.current_directory)
+        self.main.load_path_and_open_viewer(filepath, self.current_directory, has_segmentation)
     
     # ========== HELPER METHODS ==========
     

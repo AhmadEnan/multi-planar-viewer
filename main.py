@@ -37,9 +37,11 @@ class Main:
         img, affine = self.data["image"], self.data[ "orientation"]
         self.header = self.data.get("header", None)
         self.nifti_data = nib.Nifti1Image(img, affine)
-
-        self.csv_path, self.seg_out_path = self.run_segmentator_ai()
         self.orientation = self.run_classifier_ai()
+        if self.has_segmentation:
+            self.csv_path, self.seg_out_path = 'segmentations_out/slice_organ_mapping.csv','segmentations_out'
+        else:
+            self.csv_path, self.seg_out_path = self.run_segmentator_ai()
 
 
     def load_path(self, path):
@@ -48,9 +50,10 @@ class Main:
         self.window.update_viewer()
 
 
-    def load_path_and_open_viewer(self, path, folder):
+    def load_path_and_open_viewer(self, path, folder, has_segmentation=False):
         self.current_file_path = path
         self.current_directory = folder
+        self.has_segmentation = has_segmentation
         self.main_inspector.close()
         self.load_data()
         self.open_viewer()
@@ -58,7 +61,7 @@ class Main:
     def run_classifier_ai(self):
         "Initialize classifier"
         classifier = MRIOrientationClassifier(
-            checkpoint_path="ai/mri_orientation_finetuned.pth",
+            checkpoint_path="ai/model_checkpoint/mri_orientation_finetuned.pth",
             mri_foundation_path=None,
             device="cuda" if torch.cuda.is_available() else 'cpu'  # or "cpu"
         )
@@ -68,21 +71,18 @@ class Main:
         axial_count = 0
         sagittal_count = 0
         coronal_count = 0
-        for i in range(0 , img.shape[2], 40):
-            print(f"\nPredicting for NIfTI slice {i}")
-            result = classifier.predict_from_nifti(self.nifti_data, slice_index=i)
-            if result['orientation'] == 'Axial':
-                axial_count += 1
-            if result['orientation'] == 'Coronal':
-                coronal_count += 1
-            if result['orientation'] == 'Sagittal':
-                sagittal_count += 1
-            print(f"\nPrediction Results:")
-            print(f"  Orientation: {result['orientation']}")
-            print(f"  Confidence: {result['confidence']:.4f}")
-            print(f"  All probabilities: {result['all_probabilities']}")
-            if i == 5*40 :
-                break
+        print(f"\nPredicting for NIfTI slice {img.shape[2]//2}")
+        result = classifier.predict_from_nifti(self.nifti_data, slice_index=img.shape[2]//2)
+        if result['orientation'] == 'Axial':
+            axial_count += 1
+        if result['orientation'] == 'Coronal':
+            coronal_count += 1
+        if result['orientation'] == 'Sagittal':
+            sagittal_count += 1
+        print(f"\nPrediction Results:")
+        print(f"  Orientation: {result['orientation']}")
+        print(f"  Confidence: {result['confidence']:.4f}")
+        print(f"  All probabilities: {result['all_probabilities']}")
 
         counts = {
         'Axial': axial_count,
@@ -97,8 +97,7 @@ class Main:
     def run_segmentator_ai(self):
         "Initialize segmentator"
         organ_segmentator = OrganSegmentator()
-        output_path = "segmentations_out"
-        csv_path = organ_segmentator.segment(
+        csv_path, output_path = organ_segmentator.segment(
             self.current_file_path,  # -------> Input path
             organs=["liver", 'brain', 'spleen', 'kidney_right', 'kidney_left',
                     'heart', 'stomach'],  # List of organs to segment
@@ -173,6 +172,7 @@ class MainWindow(QMainWindow):
         organ = self.most_common_organ(self.main.csv_path)
         print(f'Main organ: {organ}')
         self.viewer_manager = ViewerManager(nifti_data, segmentation_mask=f'{self.main.seg_out_path}/{organ}.nii.gz', main_organ=organ, orientation=self.main.orientation)
+        # self.viewer_manager = ViewerManager(nifti_data, segmentation_mask=f'{self.main.seg_out_path}/{organ}.nii.gz', main_organ=organ, orientation='AXIAL')
         self.open_side_inspector()
 
         self.open_action.triggered.connect(self.inspector.browse_directory)
@@ -188,6 +188,8 @@ class MainWindow(QMainWindow):
             organ = self.most_common_organ(self.main.csv_path)
             print(f'Main organ: {organ}')
             self.viewer_manager = ViewerManager(self.main.nifti_data, segmentation_mask=f'{self.main.seg_out_path}/{organ}.nii.gz', main_organ=organ, orientation=self.main.orientation)
+            # self.viewer_manager = ViewerManager(self.main.nifti_data, segmentation_mask=f'{self.main.seg_out_path}/{organ}.nii.gz', main_organ=organ, orientation='axial')
+
             self.central_widget_layout.addWidget(self.viewer_manager, 4)
             
     def most_common_organ(self,csv_path):

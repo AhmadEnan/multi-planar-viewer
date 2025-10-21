@@ -2,6 +2,7 @@ import os
 import csv
 import nibabel as nib
 import numpy as np
+import shutil
 from totalsegmentator.python_api import totalsegmentator
 
 class OrganSegmentator:
@@ -12,6 +13,8 @@ class OrganSegmentator:
         """
         Segments organs and creates a CSV mapping slices to organs
         """
+        patient_name = input_path.split(os.sep)[-1].split("/")[0]
+        output_path = patient_name + "_" + output_path
         # Check if segmentation already exists
         if os.path.exists(output_path) and os.listdir(output_path):
             nifti_files = [f for f in os.listdir(output_path) if f.endswith('.nii.gz')]
@@ -28,7 +31,7 @@ class OrganSegmentator:
         csv_path = os.path.join(output_path, "slice_organ_mapping.csv")
         self.create_slice_organ_csv(output_path, csv_path)
         
-        return csv_path
+        return csv_path, output_path
 
     def _run_segmentation(self, input_path, organs, output_path):
         """

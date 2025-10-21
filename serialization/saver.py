@@ -26,7 +26,7 @@ def crop_roi(data: Dict[str, Any], bounds: Tuple[int, int, int, int, int, int]) 
         Cropped volume dictionary with adjusted affine and metadata.
     """
     img = data["image"]
-    cropped = img[bounds[0]:bounds[1], bounds[2]:bounds[3], bounds[4]:bounds[5]]
+    cropped = img[bounds[0]:bounds[3], bounds[1]:bounds[4], bounds[2]:bounds[5]]
 
     affine = data["orientation"].copy()
     voxel_spacing = np.array(data["voxel_spacing"])
@@ -49,6 +49,16 @@ def export_nifti(cropped_data: Dict[str, Any], header, output_path: str):
     img = cropped_data["image"]
     affine = cropped_data["orientation"]
     nii = nib.Nifti1Image(img, affine, header=header)
+    # Get the directory name
+    output_dir = os.path.dirname(output_path)
+
+    # Create the folder if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+
+    # If the file already exists, remove it so it can be recreated
+    if os.path.exists(output_path):
+        os.remove(output_path)
+
     nib.save(nii, output_path)
 
 
