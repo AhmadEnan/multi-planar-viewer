@@ -15,7 +15,6 @@ from PIL import Image
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-
 MODEL_CHECKPOINT = "ai/model_checkpoint/mri_orientation_finetuned.pth"
 IMAGE_SIZE = (1024, 1024)
 NUM_CLASSES = 3

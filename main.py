@@ -31,18 +31,20 @@ class Main:
         # Loading file
     def load_data(self):
         loader = DataLoader(self.current_file_path)
-
         
         self.data = loader.load()
         img, affine = self.data["image"], self.data[ "orientation"]
         self.header = self.data.get("header", None)
         self.nifti_data = nib.Nifti1Image(img, affine)
+        self.orientation = "AXIAL"
+        self.csv_path, self.seg_out_path = r'exported_roi.nii.gz_segmentations_out\slice_organ_mapping.csv', r'exported_roi.nii.gz_segmentations_out'
         self.orientation = self.run_classifier_ai()
         if self.has_segmentation:
             self.csv_path, self.seg_out_path = 'segmentations_out/slice_organ_mapping.csv','segmentations_out'
         else:
             self.csv_path, self.seg_out_path = self.run_segmentator_ai()
 
+        
 
     def load_path(self, path):
         self.current_file_path = path

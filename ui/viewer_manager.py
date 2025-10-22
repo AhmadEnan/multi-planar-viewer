@@ -103,21 +103,28 @@ class ViewerManager(QFrame):
         self.cine_menu_button = QToolButton(self)
         self.cine_menu_button.setToolTip("Choose the speed of of Cine")
         self.cine_menu_button.setText(f"{self.cine_speed}x")
-        # self.cine_menu_button.setStyleSheet("color: grey;")
-        # self.cine_menu_button.setEnabled(False)
         self.toolbar.addWidget(self.cine_menu_button)
 
         self.speed_menu = QMenu(self)
         action1 = QAction("0.5x", self)
         action2 = QAction("1x", self)
         action3 = QAction("2x", self)
+        action4 = QAction("3x", self)
+        action5 = QAction("4x", self)
+        action6 = QAction("10x", self)
         self.speed_menu.addAction(action1)
         self.speed_menu.addAction(action2)
         self.speed_menu.addAction(action3)
+        self.speed_menu.addAction(action4)
+        self.speed_menu.addAction(action5)
+        self.speed_menu.addAction(action6)
 
         action1.triggered.connect(lambda: self._set_cine_speed(0.5))
         action2.triggered.connect(lambda: self._set_cine_speed(1))
         action3.triggered.connect(lambda: self._set_cine_speed(2))
+        action4.triggered.connect(lambda: self._set_cine_speed(3))
+        action5.triggered.connect(lambda: self._set_cine_speed(4))
+        action6.triggered.connect(lambda: self._set_cine_speed(1000))
 
         self.cine_menu_button.setMenu(self.speed_menu)
         self.cine_menu_button.setPopupMode(QToolButton.MenuButtonPopup)
@@ -213,7 +220,11 @@ class ViewerManager(QFrame):
     
     def _set_cine_speed(self, speed):
         self.cine_speed = speed
-        self.cine_menu_button.setText(f"{speed}x")
+        if speed == 1000:
+            self.cine_menu_button.setText(f"10x")
+        else:
+            self.cine_menu_button.setText(f"{speed}x")
+
 
 
     def play_cine(self):
@@ -221,8 +232,8 @@ class ViewerManager(QFrame):
         if self.cine_action.isChecked():
             self.cine_action.setText("⏸️")
             # Calculate frame interval (in ms)
-            # Example: 1x = 100 ms per frame, 0.5x = slower, 2x = faster
-            base_interval = 100  # ms
+            # Example: 1x = 33 ms per frame, 0.5x = slower, 2x = faster
+            base_interval = 33  # ms
             interval = int(base_interval / self.cine_speed)
             self.next_slice()
             self.timer.start(interval)
@@ -992,6 +1003,7 @@ class ViewPort(QFrame):
         if self.orientation == 'axial':
             if not (roi_start[2] <= self.current_slice <= roi_end[2]):
                 return (None, None, None, None)
+            # For axial, keep original order but with current slice for z
             corners = [
                 [roi_start[0], roi_start[1], self.current_slice],
                 [roi_end[0], roi_end[1], self.current_slice]
@@ -999,16 +1011,18 @@ class ViewPort(QFrame):
         elif self.orientation == 'sagittal':
             if not (roi_start[0] <= self.current_slice <= roi_end[0]):
                 return (None, None, None, None)
+            # For sagittal, swap y/z coordinates and invert z
             corners = [
-                [self.current_slice, roi_start[1], roi_start[2]],
-                [self.current_slice, roi_end[1], roi_end[2]]
+                [self.current_slice, roi_start[1], roi_end[2]],
+                [self.current_slice, roi_end[1], roi_start[2]]
             ]
         elif self.orientation == 'coronal':
             if not (roi_start[1] <= self.current_slice <= roi_end[1]):
                 return (None, None, None, None)
+            # For coronal, show x and z coordinates, with current slice for y
             corners = [
-                [roi_start[0], self.current_slice, roi_start[2]],
-                [roi_end[0], self.current_slice, roi_end[2]]
+                [roi_start[0], self.current_slice, roi_end[2]], 
+                [roi_end[0], self.current_slice, roi_start[2]]
             ]
         else:
             return (None, None, None, None)
@@ -1393,17 +1407,17 @@ class FourthView(QFrame):
     def _map_norm_to_voxel(self, x_norm, y_norm, base_view, slice_idx):
         """
         Map a normalized (0..1) coordinate on the base 2D viewport to voxel coordinates (x,y,z).
-        IMPORTANT: Many view coordinates have origin at top-left (y down). We invert y to map correctly
-        to voxel coordinates (so superior/inferior are correct).
+        IMPORTANT: Many view coordinates have origin at top-left (y down). We need to handle each
+        orientation correctly to match the display.
         """
         s = self.vol.shape  # (nx, ny, nz)
-        # invert y_norm (screen coordinates: y=0 top -> voxel y should be top -> invert)
-        y_norm_inv = 1.0 - y_norm
-
+        y_norm_inv = 1.0 - y_norm  # For views that need y inversion
+        
         if base_view == 'axial':
-            # x across vol.shape[0], y across vol.shape[1], z is slice index
-            x = x_norm * (s[0] - 1)
-            y = y_norm_inv * (s[1] - 1)
+            # For axial, no y inversion needed since display is already flipped
+            # Map x from right to left to match display
+            x = (1.0 - x_norm) * (s[0] - 1)
+            y = y_norm * (s[1] - 1)
             z = float(slice_idx)
             return np.array([x, y, z], dtype=np.float64)
 
@@ -1411,14 +1425,14 @@ class FourthView(QFrame):
             # sagittal view usually shows (z vs y) with x = slice index
             x = float(slice_idx)
             y = x_norm * (s[1] - 1)
-            z = y_norm_inv * (s[2] - 1)
+            z = y_norm_inv * (s[2] - 1)  # Invert y for proper inferior-superior mapping
             return np.array([x, y, z], dtype=np.float64)
 
         elif base_view == 'coronal':
             # coronal view usually shows (x vs z) with y = slice index
             x = x_norm * (s[0] - 1)
             y = float(slice_idx)
-            z = y_norm_inv * (s[2] - 1)
+            z = y_norm_inv * (s[2] - 1)  # Invert y for proper inferior-superior mapping
             return np.array([x, y, z], dtype=np.float64)
 
         else:
@@ -1588,6 +1602,15 @@ class FourthView(QFrame):
             out = ((a - mn) / (mx - mn) * 255.0).astype(np.uint8)
         else:
             out = np.zeros_like(a, dtype=np.uint8)
+            
+        # Flip based on base view orientation
+        if self.manager.oblique_action.isChecked():
+            base = getattr(self.manager, 'base_view_to4th', None)
+            if base == 'axial':
+                out = np.flipud(out)  # flip up-down for axial
+            elif base == 'coronal':
+                out = np.fliplr(out)  # flip left-right for coronal
+        
         return out
 
     def _set_pixmap(self, img):
