@@ -109,7 +109,7 @@ Developed with performance, usability, and robustness in mind, this viewer effic
 ## 🧪 Screenshots
 
 | View                                                      | ROI                                                  | Organ Boundary                                  | Oblique View                          |
-| --------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------- |                                       |
+| --------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------- | ------------------------------------- |
 | ![Axial/Coronal/Sagittal View/4th](./images/mpr_view.png) | ![Region of Interest](./images/roi.png)              | ![Organ Boundary](./images/volume_render.png)   | ![Oblique View](./images/oblique.png) |
 
 ---
