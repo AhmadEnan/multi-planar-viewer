@@ -110,7 +110,7 @@ Developed with performance, usability, and robustness in mind, this viewer effic
 
 | View                                                      | ROI                                                  | Volume Rendering                                |
 | --------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------- |
-| ![Axial/Coronal/Sagittal View/4th](./images/mpr_view.png) | ![Region of Interest](./images/roi.png)              | ![Volume Rendering](./images/volume_render.png) |
+| ![Axial/Coronal/Sagittal View/4th](./images/mpr_view.png) | ![Region of Interest](./images/roi.png)              | ![Volume Rendering](./images/volume_render.png) | ![Oblique View](./images/oblique.png)
 
 ---
 
