@@ -13,7 +13,10 @@ from inspector.inspectorVer import InspectorPanelVertical
 from inspector.Inspector import InspectorPanel, open_inspector_view
 from collections import Counter
 import csv
-
+import numpy as np
+import pydicom
+import os
+from PIL import Image
 
 # The main class which manage the inputs and output of all other classes
 class Main:
@@ -26,23 +29,34 @@ class Main:
         self.current_file_path = None
         self.main_inspector = InspectorPanel(self)
         self.main_inspector.show()
+        self.one_dicom_file = False
 
 
         # Loading file
     def load_data(self):
+        self.one_dicom_file = False
+        if not ".nii" in self.current_file_path :
+            dcm_files = [f for f in os.listdir(self.current_file_path) if f.lower().endswith(".dcm")]
+            if len(dcm_files) == 1:
+                self.convert_dicom_to_png(os.path.join(self.current_file_path, dcm_files[0]), 'converted.png')
+                self.orientation, self.main_organ = self.ai_fallback('converted.png')
+                self.one_dicom_file = True
+                self.current_file_path = self.convert_single_dicom_to_fake_nifti(self.current_directory)
+
         loader = DataLoader(self.current_file_path)
-        
+
         self.data = loader.load()
         img, affine = self.data["image"], self.data[ "orientation"]
         self.header = self.data.get("header", None)
         self.nifti_data = nib.Nifti1Image(img, affine)
-        self.orientation = "AXIAL"
-        self.csv_path, self.seg_out_path = r'exported_roi.nii.gz_segmentations_out\slice_organ_mapping.csv', r'exported_roi.nii.gz_segmentations_out'
-        self.orientation = self.run_classifier_ai()
-        if self.has_segmentation:
-            self.csv_path, self.seg_out_path = 'segmentations_out/slice_organ_mapping.csv','segmentations_out'
-        else:
-            self.csv_path, self.seg_out_path = self.run_segmentator_ai()
+
+        if not self.one_dicom_file:
+            self.csv_path, self.seg_out_path = r'exported_roi.nii.gz_segmentations_out\slice_organ_mapping.csv', r'exported_roi.nii.gz_segmentations_out'
+            self.orientation = self.run_classifier_ai()
+            if self.has_segmentation:
+                self.csv_path, self.seg_out_path = 'segmentations_out/slice_organ_mapping.csv','segmentations_out'
+            else:
+                self.csv_path, self.seg_out_path = self.run_segmentator_ai()
 
         
 
@@ -102,7 +116,7 @@ class Main:
         csv_path, output_path = organ_segmentator.segment(
             self.current_file_path,  # -------> Input path
             organs=["liver", 'brain', 'spleen', 'kidney_right', 'kidney_left',
-                    'heart', 'stomach'],  # List of organs to segment
+                    'heart', 'stomach', ],  # List of detectable organs to segment
             output_path="segmentations_out"
         )
         print(f"Segmentation CSV saved at: {csv_path}")
@@ -123,8 +137,80 @@ class Main:
         else:
             print("No ROI selected for export.")
         
-        
+    def convert_single_dicom_to_fake_nifti(self, input_folder, output_path="fake_volume.nii.gz", stack_depth=10):
+        """
+        Converts a single-slice DICOM file in a folder into a fake 3D NIfTI volume.
 
+        Parameters:
+            input_folder (str): Path to folder containing exactly one .dcm file.
+            output_path (str): Path where the fake NIfTI will be saved.
+            stack_depth (int): Number of times to stack the slice to make a 3D volume.
+
+        Returns:
+            str: Path to the saved fake NIfTI file.
+        """
+        # --- Check folder contents ---
+        dcm_files = [f for f in os.listdir(input_folder) if f.lower().endswith(".dcm")]
+        if len(dcm_files) != 1:
+            raise ValueError(f"Expected exactly one .dcm file in folder, found {len(dcm_files)}")
+
+        dcm_path = os.path.join(input_folder, dcm_files[0])
+
+        # --- Load the DICOM file ---
+        ds = pydicom.dcmread(dcm_path)
+        pixel_array = ds.pixel_array.astype(np.float32)
+
+        # --- Create fake 3D volume ---
+        fake_volume = np.repeat(pixel_array[..., np.newaxis], stack_depth, axis=-1)
+
+        # --- Define voxel spacing (approximate) ---
+        spacing_x, spacing_y = ds.PixelSpacing if "PixelSpacing" in ds else (1.0, 1.0)
+        spacing_z = ds.SliceThickness if "SliceThickness" in ds else 1.0
+        affine = np.diag([spacing_x, spacing_y, spacing_z, 1])
+
+        # --- Create and save NIfTI ---
+        nifti_img = nib.Nifti1Image(fake_volume, affine)
+        nib.save(nifti_img, output_path)
+
+        return os.path.abspath(output_path) 
+    
+    def ai_fallback(self, img_path: str):
+        from google import genai
+        from google.genai import types
+
+        with open(img_path, 'rb') as f:
+            image_bytes = f.read()
+
+        client = genai.Client(api_key="AIzaSyC4Ab_blcq704AaIO2SGDPXjjz3uKhlLCw")
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[
+            types.Part.from_bytes(
+                data=image_bytes,
+                mime_type='image/jpeg',
+            ),
+            'Read this CT scan slice and determine its orientation (axial, coronal, sagittal) and the main organ detected in it. Reply with following format only "Orientation,Organ".'
+            ]
+        )
+
+        return response.text.split(',')  # returns (orientation,organ)
+
+    def convert_dicom_to_png(self, dicom_path: str, png_path: str) -> None:
+        """Read a DICOM file and save it as a normalized PNG."""
+        ds = pydicom.dcmread(dicom_path)  # read DICOM dataset
+        img_arr = ds.pixel_array  # type: np.ndarray
+        
+        # Normalize the pixel array to 0–255 and convert to uint8
+        img_arr = img_arr.astype(float)
+        img_arr -= img_arr.min()
+        if img_arr.max() != 0:
+            img_arr /= img_arr.max()
+        img_arr *= 255.0
+        img_arr = img_arr.astype(np.uint8)
+        
+        # Convert to PIL Image and save
+        img = Image.fromarray(img_arr)
+        img.save(png_path)
 
 # This the main class for managing GUI
 class MainWindow(QMainWindow):
@@ -171,9 +257,16 @@ class MainWindow(QMainWindow):
         self.inspector_frame_layout.setStretch(0,1)
 
         # Adding Viewer Manager
-        organ = self.most_common_organ(self.main.csv_path)
+        
+        if self.main.one_dicom_file:
+            organ = self.main.main_organ  # Default organ for single DICOM fallback
+            mask = None
+        else:
+            organ = self.most_common_organ(self.main.csv_path)
+            print(f'Main organ: {organ}')
+            mask = f'{self.main.seg_out_path}/{organ}.nii.gz'
         print(f'Main organ: {organ}')
-        self.viewer_manager = ViewerManager(nifti_data, segmentation_mask=f'{self.main.seg_out_path}/{organ}.nii.gz', main_organ=organ, orientation=self.main.orientation)
+        self.viewer_manager = ViewerManager(nifti_data, segmentation_mask=mask, main_organ=organ, orientation=self.main.orientation)
         # self.viewer_manager = ViewerManager(nifti_data, segmentation_mask=f'{self.main.seg_out_path}/{organ}.nii.gz', main_organ=organ, orientation='AXIAL')
         self.open_side_inspector()
 
@@ -187,11 +280,17 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'viewer_manager'):
             self.central_widget_layout.removeWidget(self.viewer_manager)
             self.viewer_manager.deleteLater()
-            organ = self.most_common_organ(self.main.csv_path)
-            print(f'Main organ: {organ}')
-            self.viewer_manager = ViewerManager(self.main.nifti_data, segmentation_mask=f'{self.main.seg_out_path}/{organ}.nii.gz', main_organ=organ, orientation=self.main.orientation)
-            # self.viewer_manager = ViewerManager(self.main.nifti_data, segmentation_mask=f'{self.main.seg_out_path}/{organ}.nii.gz', main_organ=organ, orientation='axial')
 
+            if self.main.one_dicom_file:
+                organ = self.main.main_organ  # Default organ for single DICOM fallback
+                mask = None
+            else:
+                organ = self.most_common_organ(self.main.csv_path)
+                print(f'Main organ: {organ}')
+                mask = f'{self.main.seg_out_path}/{organ}.nii.gz'
+            
+            self.viewer_manager = ViewerManager(self.main.nifti_data, segmentation_mask=mask, main_organ=organ, orientation=self.main.orientation)
+                
             self.central_widget_layout.addWidget(self.viewer_manager, 4)
             
     def most_common_organ(self,csv_path):
