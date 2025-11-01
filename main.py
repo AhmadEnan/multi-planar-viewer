@@ -138,6 +138,31 @@ class Main:
         else:
             print("No ROI selected for export.")
         
+    
+# Note: this part below is not an essential feature, it is just put quickly to handle user single DICOM file input,
+# as the app and AI model are mainly designed to work on NIfTI files Volumes or DICOM series
+# This part runs only when a single DICOM file is given as input
+    def ai_fallback(self, img_path: str):
+        from google import genai
+        from google.genai import types
+
+        with open(img_path, 'rb') as f:
+            image_bytes = f.read()
+
+        client = genai.Client(api_key="YOUR_API_KEY_HERE")
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[
+            types.Part.from_bytes(
+                data=image_bytes,
+                mime_type='image/jpeg',
+            ),
+            'Read this CT scan slice and determine its orientation (axial, coronal, sagittal) and the main organ detected in it. Reply with following format only "Orientation,Organ".'
+            ]
+        )
+
+        return response.text.split(',')  # returns (orientation,organ)
+
     def convert_single_dicom_to_fake_nifti(self, input_folder, output_path="fake_volume.nii.gz", stack_depth=10):
         """
         Converts a single-slice DICOM file in a folder into a fake 3D NIfTI volume.
@@ -174,27 +199,6 @@ class Main:
         nib.save(nifti_img, output_path)
 
         return os.path.abspath(output_path) 
-    
-    def ai_fallback(self, img_path: str):
-        from google import genai
-        from google.genai import types
-
-        with open(img_path, 'rb') as f:
-            image_bytes = f.read()
-
-        client = genai.Client(api_key="AIzaSyC4Ab_blcq704AaIO2SGDPXjjz3uKhlLCw")
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[
-            types.Part.from_bytes(
-                data=image_bytes,
-                mime_type='image/jpeg',
-            ),
-            'Read this CT scan slice and determine its orientation (axial, coronal, sagittal) and the main organ detected in it. Reply with following format only "Orientation,Organ".'
-            ]
-        )
-
-        return response.text.split(',')  # returns (orientation,organ)
 
     def convert_dicom_to_png(self, dicom_path: str, png_path: str) -> None:
         """Read a DICOM file and save it as a normalized PNG."""

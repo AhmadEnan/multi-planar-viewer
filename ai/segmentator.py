@@ -40,9 +40,9 @@ class OrganSegmentator:
         totalsegmentator(
             input=input_path,
             output=output_path,
-            # roi_subset = organs,
-            task='teeth',  
-            # fast=True,
+            roi_subset = organs,
+            task='total',  
+            fast=True,
             body_seg=True,
             force_split=False,
             nr_thr_saving=1,
