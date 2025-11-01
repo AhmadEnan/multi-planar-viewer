@@ -133,9 +133,9 @@ ROI crop and export option to export a required part of scan in a new file
 ---
 ***ROI crop***
 <p align="center">
-  <img src="images/roi.png" width="33%" />
-  <img src="images/cropped_brain_overview.png" width="33%" />
-  <img src="images/cropped_brain_outline.png" width="33%" />
+  <img src="images/roi.png" width="70%" />
+  <img src="images/cropped_brain_overview.png" width="49%" />
+  <img src="images/cropped_brain_outline.png" width="49%" />
 </p>
 
 ---
