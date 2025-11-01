@@ -52,7 +52,8 @@ class Main:
 
         if not self.one_dicom_file:
             self.csv_path, self.seg_out_path = r'exported_roi.nii.gz_segmentations_out\slice_organ_mapping.csv', r'exported_roi.nii.gz_segmentations_out'
-            self.orientation = self.run_classifier_ai()
+            # self.orientation = self.run_classifier_ai()
+            self.orientation = "Axial"
             if self.has_segmentation:
                 self.csv_path, self.seg_out_path = 'segmentations_out/slice_organ_mapping.csv','segmentations_out'
             else:
