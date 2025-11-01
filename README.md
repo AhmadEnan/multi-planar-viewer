@@ -112,19 +112,33 @@ Cine playback to navigate slices automatically
 ROI crop and export option to export a required part of scan in a new file
 
 # 6. Screenshots and Demo
-![Demo](images/task2-MPR-Video-edited.gif)
+<p align="center">
+  <img src="images/task2-MPR-Video-edited.gif" width="80%">
+</p>
 
 ---
-
-### Interface Gallery
-| ![file_inspector](images/loaded_files_start_inspector.png) | ![scan_overview](images/scan_overview.png) | ![scan_liver_outline](images/scan_liver_outline.png) | ![scan_oblique](images/scan_oblique.png) |
-
-| ![ROI](images/roi.png) | ![cropped_brain_overview](images/cropped_brain_overview.png) | ![cropped_brain_outline](images/cropped_brain_outline.png) |
+***file inspector***
+<p align="center">
+  <img src="images/loaded_files_start_inspector.png" width="50%" height="80%" />
+</p>
 
 ---
+***Main interferance***
+<p align="center">
+  <img src="images/scan_overview.png" width="70%" />
+  <img src="images/scan_liver_outline.png" width="49%" />
+  <img src="images/scan_oblique.png" width="49%" />
+</p>
 
-> *All images above are placeholders. Replace with real screenshots from your project’s `/images` directory.*
+---
+***ROI crop***
+<p align="center">
+  <img src="images/roi.png" width="33%" />
+  <img src="images/cropped_brain_overview.png" width="33%" />
+  <img src="images/cropped_brain_outline.png" width="33%" />
+</p>
 
+---
 
 # Project Background
 This project was developed as part of the Biomedical Engineering coursework at Cairo University, under the supervision of Professor Tamer Basha.
